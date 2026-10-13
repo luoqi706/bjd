@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Tag as TagIcon, Plus, X } from 'lucide-react';
+import { Search, Tag as TagIcon, Plus, X, Check } from 'lucide-react';
 import { DollItem, ItemStatus } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { getStoredTags, saveStoredTags } from '../utils/storage';
@@ -26,11 +26,11 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
   // 状态筛选：全部 (all) 或 4个状态之一
   const [statusFilter, setStatusFilter] = useState<'all' | ItemStatus>('all');
 
-  // Tag 筛选：当前已生效的 Tag
-  const [activeTag, setActiveTag] = useState<string>('all');
+  // Tag 筛选：支持多选，当前已生效的 Tag 列表 (空数组表示全部，无筛选)
+  const [activeTags, setActiveTags] = useState<string[]>([]);
 
-  // Tag 筛选弹窗内临时选中的 Tag
-  const [tempTag, setTempTag] = useState<string>('all');
+  // Tag 筛选弹窗内临时选中的 Tag 列表
+  const [tempTags, setTempTags] = useState<string[]>([]);
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
 
   // 所有可用 Tag 列表 (支持自定义添加)
@@ -40,10 +40,22 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
 
   // 打开 Tag 筛选弹窗
   const handleOpenTagModal = () => {
-    setTempTag(activeTag);
+    setTempTags([...activeTags]);
     setIsAddingTag(false);
     setNewTagInput('');
     setIsTagModalOpen(true);
+  };
+
+  // 切换单个 Tag 的临时选中状态 (多选)
+  const handleToggleTempTag = (t: string) => {
+    setTempTags((prev) =>
+      prev.includes(t) ? prev.filter((item) => item !== t) : [...prev, t]
+    );
+  };
+
+  // 移除单个已生效的 Tag
+  const handleRemoveActiveTag = (t: string) => {
+    setActiveTags((prev) => prev.filter((item) => item !== t));
   };
 
   // 弹窗中添加新 Tag
@@ -55,23 +67,22 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
       const updated = [...allTags, trimmed];
       setAllTags(updated);
       saveStoredTags(updated);
-      setTempTag(trimmed);
     }
+    // 自动勾选新建的 tag
+    setTempTags((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
     setNewTagInput('');
     setIsAddingTag(false);
   };
 
   // 弹窗确认
   const handleConfirmTagModal = () => {
-    setActiveTag(tempTag);
+    setActiveTags([...tempTags]);
     setIsTagModalOpen(false);
   };
 
-  // 弹窗重置
+  // 弹窗重置 (清空临时选择)
   const handleResetTagModal = () => {
-    setTempTag('all');
-    setActiveTag('all');
-    setIsTagModalOpen(false);
+    setTempTags([]);
   };
 
   // 综合过滤娃物，并严格按从新到旧排序 (最新在最上，最开始录入在最下)
@@ -89,8 +100,8 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
       if (statusFilter !== 'all' && item.status !== statusFilter) {
         return false;
       }
-      // Tag
-      if (activeTag !== 'all' && item.tag !== activeTag) {
+      // Tag 多选过滤：若选中了 tag，则当前娃物的 tag 必须在选中列表中
+      if (activeTags.length > 0 && !activeTags.includes(item.tag)) {
         return false;
       }
       return true;
@@ -105,7 +116,16 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
       }
       return 0;
     });
-  }, [items, searchKeyword, statusFilter, activeTag]);
+  }, [items, searchKeyword, statusFilter, activeTags]);
+
+  // 当物品按照 tag 筛选后，计算所有 tag 中娃物的总金额 (严格使用娃柜金额 cabinetPrice，而非账本记录金额)
+  const totalCabinetPrice = useMemo(() => {
+    return filteredItems.reduce((acc, item) => {
+      const price = typeof item.cabinetPrice === 'number' ? item.cabinetPrice : 0;
+      const qty = typeof item.cabinetQuantity === 'number' && item.cabinetQuantity > 0 ? item.cabinetQuantity : 1;
+      return acc + price * qty;
+    }, 0);
+  }, [filteredItems]);
 
   return (
     <div className="space-y-3 pb-16">
@@ -127,11 +147,11 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
         <button
           onClick={handleOpenTagModal}
           className={`absolute right-2 top-1.5 p-1 rounded-lg transition-colors cursor-pointer ${
-            activeTag !== 'all'
+            activeTags.length > 0
               ? 'text-[var(--theme-primary)] bg-[var(--theme-primary-light)] ring-1 ring-[var(--theme-primary)]/40'
               : 'text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]'
           }`}
-          title={activeTag !== 'all' ? `已筛选Tag: ${activeTag}` : '选择Tag筛选'}
+          title={activeTags.length > 0 ? `已筛选 ${activeTags.length} 个Tag: ${activeTags.join(', ')}` : '选择Tag筛选'}
         >
           <TagIcon className="w-4 h-4" />
         </button>
@@ -159,17 +179,51 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
         })}
       </div>
 
-      {/* 如果当前有 Tag 筛选，展示一个小提示并允许直接清除 */}
-      {activeTag !== 'all' && (
-        <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-[var(--theme-primary-light)] border border-[var(--theme-border)] text-[11px] text-[var(--theme-text)]">
-          <span>已筛选 Tag: <strong>{activeTag}</strong></span>
-          <button
-            onClick={() => setActiveTag('all')}
-            className="text-[10px] text-[var(--theme-primary)] hover:underline flex items-center gap-0.5 cursor-pointer"
-          >
-            <X className="w-3 h-3" />
-            清除筛选
-          </button>
+      {/* 当物品按照 tag 筛选后，在筛选后的页面显示所有所选 tag 中娃物的总金额 (娃柜金额) */}
+      {activeTags.length > 0 && (
+        <div className="p-2.5 rounded-2xl bg-[var(--theme-primary-light)] border border-[var(--theme-border)] text-xs text-[var(--theme-text)] space-y-2 shadow-2xs animate-fade-in">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <span className="text-[11px] text-[var(--theme-text-muted)] shrink-0 font-medium">已选 Tag:</span>
+              <div className="flex flex-wrap gap-1">
+                {activeTags.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-white text-[var(--theme-primary)] border border-[var(--theme-border)] shadow-2xs"
+                  >
+                    <span>{t}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveActiveTag(t)}
+                      className="hover:text-red-500 cursor-pointer"
+                      title={`取消筛选 ${t}`}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTags([])}
+              className="text-[11px] text-[var(--theme-primary)] hover:underline flex items-center gap-0.5 shrink-0 cursor-pointer font-medium"
+            >
+              <X className="w-3 h-3" />
+              清除筛选
+            </button>
+          </div>
+
+          <div className="pt-2 border-t border-[var(--theme-border)]/50 flex items-center justify-between">
+            <span className="text-[11px] text-[var(--theme-text-muted)]">
+              当前展示共 {filteredItems.length} 件娃物
+            </span>
+            <div className="text-xs font-medium text-[var(--theme-text)] flex items-center gap-1">
+              <span>娃柜总金额：</span>
+              <span className="font-mono font-bold text-sm text-[var(--theme-primary)] tabular-nums">
+                {formatCurrency(totalCabinetPrice)}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -177,11 +231,11 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
       {filteredItems.length === 0 ? (
         <div className="text-center py-16 rounded-2xl bg-white/50 text-[var(--theme-text-muted)] text-xs space-y-2">
           <p>暂无符合筛选条件的娃物</p>
-          {(statusFilter !== 'all' || activeTag !== 'all' || searchKeyword) && (
+          {(statusFilter !== 'all' || activeTags.length > 0 || searchKeyword) && (
             <button
               onClick={() => {
                 setStatusFilter('all');
-                setActiveTag('all');
+                setActiveTags([]);
                 setSearchKeyword('');
               }}
               className="text-xs text-[var(--theme-primary)] font-medium underline cursor-pointer"
@@ -238,9 +292,14 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--theme-border)]/50 pb-2.5">
-              <h3 className="text-sm font-serif-sc font-bold text-[var(--theme-text)]">
-                选择物品 Tag 筛选
-              </h3>
+              <div>
+                <h3 className="text-sm font-serif-sc font-bold text-[var(--theme-text)]">
+                  选择物品 Tag 筛选
+                </h3>
+                <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">
+                  支持多选标签，点击可切换选中状态
+                </p>
+              </div>
               <button
                 onClick={() => setIsTagModalOpen(false)}
                 className="p-1 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] rounded-full hover:bg-black/5"
@@ -249,22 +308,26 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
               </button>
             </div>
 
-            {/* Tag 标签网格 */}
+            {/* Tag 标签网格 (支持多选) */}
             <div className="flex flex-wrap gap-1.5 max-h-56 overflow-y-auto pr-1">
-              {allTags.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTempTag(tempTag === t ? 'all' : t)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                    tempTag === t
-                      ? 'bg-[var(--theme-primary)] text-white shadow-2xs font-semibold'
-                      : 'bg-white/80 text-[var(--theme-text)] border border-[var(--theme-border)] hover:bg-white'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+              {allTags.map((t) => {
+                const isSelected = tempTags.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => handleToggleTempTag(t)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-[var(--theme-primary)] text-white shadow-2xs font-semibold'
+                        : 'bg-white/80 text-[var(--theme-text)] border border-[var(--theme-border)] hover:bg-white'
+                    }`}
+                  >
+                    <span>{t}</span>
+                    {isSelected && <Check className="w-3 h-3 text-white shrink-0" />}
+                  </button>
+                );
+              })}
 
               {/* 
                 在所有的 tag 标签后面，增加一个 SVG 图标的小小的加号 (+)
@@ -316,7 +379,7 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
                 onClick={handleConfirmTagModal}
                 className="w-full py-2 text-xs font-semibold text-white bg-[var(--theme-primary)] hover:bg-[var(--theme-primary-hover)] rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                确定
+                {tempTags.length > 0 ? `确定 (${tempTags.length})` : '确定'}
               </button>
             </div>
           </div>
