@@ -74,9 +74,9 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
     setIsTagModalOpen(false);
   };
 
-  // 综合过滤娃物
+  // 综合过滤娃物，并严格按从新到旧排序 (最新在最上，最开始录入在最下)
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const list = items.filter((item) => {
       // 关键字
       if (searchKeyword.trim()) {
         const kw = searchKeyword.trim().toLowerCase();
@@ -94,6 +94,16 @@ export const CabinetView: React.FC<CabinetViewProps> = ({
         return false;
       }
       return true;
+    });
+
+    // 娃物页面严格从上到下按新到旧排序 (最新录入在最上方，最开始录入在最下方)
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime() || 0;
+      const timeB = new Date(b.createdAt || 0).getTime() || 0;
+      if (timeA !== timeB) {
+        return timeB - timeA;
+      }
+      return 0;
     });
   }, [items, searchKeyword, statusFilter, activeTag]);
 

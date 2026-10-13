@@ -245,22 +245,45 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
+/**
+ * 严格按照从新到旧排序 (最新录入在最上，最开始录入在最下)
+ */
+export function sortItemsNewestFirst(items: DollItem[]): DollItem[] {
+  return [...items].sort((a, b) => {
+    const timeA = new Date(a.createdAt || 0).getTime() || 0;
+    const timeB = new Date(b.createdAt || 0).getTime() || 0;
+    if (timeA !== timeB) {
+      return timeB - timeA;
+    }
+    return 0;
+  });
+}
+
 export async function getItemsFromIndexedDB(): Promise<DollItem[] | null> {
   try {
     const db = await openDatabase();
     return new Promise((resolve) => {
       const transaction = db.transaction(STORE_NAME, 'readonly');
       const store = transaction.objectStore(STORE_NAME);
-      const request = store.getAll();
-      request.onsuccess = () => {
-        const result = request.result;
-        if (Array.isArray(result) && result.length > 0) {
-          resolve(result as DollItem[]);
-        } else {
-          resolve(null);
+      const getOrderReq = store.get('__order_list__');
+      getOrderReq.onsuccess = () => {
+        if (getOrderReq.result && Array.isArray(getOrderReq.result.data) && getOrderReq.result.data.length > 0) {
+          resolve(sortItemsNewestFirst(getOrderReq.result.data as DollItem[]));
+          return;
         }
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const result = request.result;
+          if (Array.isArray(result) && result.length > 0) {
+            const cleanList = result.filter((i: any) => i.id !== '__order_list__') as DollItem[];
+            resolve(cleanList.length > 0 ? sortItemsNewestFirst(cleanList) : null);
+          } else {
+            resolve(null);
+          }
+        };
+        request.onerror = () => resolve(null);
       };
-      request.onerror = () => resolve(null);
+      getOrderReq.onerror = () => resolve(null);
     });
   } catch (e) {
     console.warn('IndexedDB read error:', e);
@@ -276,6 +299,8 @@ export async function saveItemsToIndexedDB(items: DollItem[]): Promise<boolean> 
       const store = transaction.objectStore(STORE_NAME);
       const clearReq = store.clear();
       clearReq.onsuccess = () => {
+        // 保存包含完整原始顺序的数组记录，防止 IndexedDB 自动按 ID 重排导致新旧倒置
+        store.put({ id: '__order_list__', data: items });
         for (const item of items) {
           store.put(item);
         }
@@ -295,16 +320,16 @@ export function getStoredItems(): DollItem[] {
     if (!raw) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ITEMS));
       saveItemsToIndexedDB(INITIAL_ITEMS).catch(() => {});
-      return INITIAL_ITEMS;
+      return sortItemsNewestFirst(INITIAL_ITEMS);
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed;
+      return sortItemsNewestFirst(parsed);
     }
-    return INITIAL_ITEMS;
+    return sortItemsNewestFirst(INITIAL_ITEMS);
   } catch (err) {
     console.error('Failed to load items from localStorage:', err);
-    return INITIAL_ITEMS;
+    return sortItemsNewestFirst(INITIAL_ITEMS);
   }
 }
 
