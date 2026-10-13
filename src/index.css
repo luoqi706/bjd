@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+:root {
+  --theme-primary: #5B7360;
+  --theme-primary-hover: #4A614F;
+  --theme-primary-light: #EBF1EC;
+  --theme-bg: #F3F6F3;
+  --theme-text: #2D3A32;
+  --theme-text-muted: #6F8873;
+  --theme-border: #CBD7CE;
+  --theme-tint-rgb: 142, 169, 147;
+}
+
+@theme {
+  --font-sans: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', 'STSong', Georgia, serif;
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', 'STSong', Georgia, serif;
+}
+
+@layer base {
+  body {
+    font-family: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', 'STSong', Georgia, serif;
+    color: var(--theme-text);
+    background-color: var(--theme-bg);
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(var(--theme-tint-rgb), 0.12) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(var(--theme-tint-rgb), 0.08) 0px, transparent 40%),
+      radial-gradient(at 50% 100%, rgba(var(--theme-tint-rgb), 0.08) 0px, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  /* Custom subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(var(--theme-tint-rgb), 0.35);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--theme-tint-rgb), 0.6);
+  }
+}
+
+.font-serif-sc {
+  font-family: 'Noto Serif SC', 'Songti SC', Georgia, serif;
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 20px -2px rgba(60, 80, 68, 0.05);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--theme-border);
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 3px rgba(var(--theme-tint-rgb), 0.2);
+  outline: none;
+}
